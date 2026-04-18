@@ -34,7 +34,7 @@ PROCESSED_DIR = REPO_ROOT / "data" / "processed"
 TRAIN_VAL_PATH = RAW_DIR / "scored_tweets_raw.jsonl"
 TEST_PATH = RAW_DIR / "test_ground_truth.jsonl"
 
-HF_DATASET_NAME = "sudar/tweet-scorer-dataset"
+HF_DATASET_NAME = "sud1157/tweet-scorer-dataset"
 
 # ---------------------------------------------------------------------------
 # Formatting
