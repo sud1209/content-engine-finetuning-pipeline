@@ -36,7 +36,14 @@ def objective(trial: optuna.Trial) -> float:
         bias="none", use_gradient_checkpointing="unsloth", random_state=42,
     )
 
-    dataset = load_dataset("sudar/tweet-scorer-dataset")
+    dataset = load_dataset("sud1157/tweet-scorer-dataset")
+
+    def apply_chat_template(examples):
+        return {"text": [
+            tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=False)
+            for msgs in examples["messages"]
+        ]}
+    dataset = dataset.map(apply_chat_template, batched=True, remove_columns=["messages"])
 
     trainer = SFTTrainer(
         model=model, tokenizer=tokenizer,
@@ -50,7 +57,7 @@ def objective(trial: optuna.Trial) -> float:
             fp16=True, bf16=False,
             logging_steps=10, eval_strategy="epoch",
             report_to="wandb",
-            dataset_text_field="messages",
+            dataset_text_field="text",
             max_seq_length=cfg.max_seq_length,
             packing=True,
         ),

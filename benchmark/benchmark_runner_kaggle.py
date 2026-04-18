@@ -37,7 +37,7 @@ def score_with_model(model, tokenizer, content: str) -> dict:
 
 
 def run_benchmark(
-    ft_repo: str = "sudar/tweet-scorer-llama3-8b",
+    ft_repo: str = "sud1157/tweet-scorer-llama3-8b",
     base_repo: str = "meta-llama/Llama-3.1-8B-Instruct",
     test_path: str = "data/raw/test_ground_truth.jsonl",
     output_dir: str = "benchmark/results",

@@ -35,7 +35,15 @@ def main(config_path: str = "training/configs/llama3_8b_qlora.yaml"):
         random_state=42,
     )
 
-    dataset = load_dataset("sudar/tweet-scorer-dataset")
+    dataset = load_dataset("sud1157/tweet-scorer-dataset")
+
+    # 'messages' column is list-of-dicts; SFTTrainer needs a plain string column.
+    def apply_chat_template(examples):
+        return {"text": [
+            tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=False)
+            for msgs in examples["messages"]
+        ]}
+    dataset = dataset.map(apply_chat_template, batched=True, remove_columns=["messages"])
 
     trainer = SFTTrainer(
         model=model,
@@ -62,7 +70,7 @@ def main(config_path: str = "training/configs/llama3_8b_qlora.yaml"):
             load_best_model_at_end=True,
             metric_for_best_model="eval_loss",
             report_to="wandb",
-            dataset_text_field="messages",
+            dataset_text_field="text",
             max_seq_length=cfg.max_seq_length,
             packing=True,
             dataset_num_proc=2,
@@ -74,7 +82,7 @@ def main(config_path: str = "training/configs/llama3_8b_qlora.yaml"):
     model.save_pretrained(f"{cfg.output_dir}/final_adapter")
     tokenizer.save_pretrained(f"{cfg.output_dir}/final_adapter")
 
-    hf_repo = os.environ.get("HF_MODEL_REPO", "sudar/tweet-scorer-llama3-8b")
+    hf_repo = os.environ.get("HF_MODEL_REPO", "sud1157/tweet-scorer-llama3-8b")
     model.push_to_hub(hf_repo)
     tokenizer.push_to_hub(hf_repo)
 

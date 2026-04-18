@@ -24,7 +24,7 @@ from unsloth import FastLanguageModel
 from benchmark.metrics import compute_metrics
 from dataset.schemas import RUBRIC_HASH
 
-REPO_ID = "sudar/tweet-scorer-llama3-8b"
+REPO_ID = "sud1157/tweet-scorer-llama3-8b"
 ADAPTER_DIR = "outputs/llama3-8b-tweet-scorer/final_adapter"
 RESULTS_PATH = "benchmark/results/benchmark_results.json"
 
