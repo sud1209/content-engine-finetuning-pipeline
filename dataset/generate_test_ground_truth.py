@@ -18,8 +18,9 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
 # Path to the production twitter-content-engine scorer
-_TCE_SCRIPTS = Path(os.environ.get("TCE_SCRIPTS_PATH", ""))
-sys.path.insert(0, str(_TCE_SCRIPTS))
+_tce_path = os.environ.get("TCE_SCRIPTS_PATH")
+if _tce_path:
+    sys.path.insert(0, _tce_path)
 
 INPUT_PATH = _REPO_ROOT / "data" / "raw" / "test_drafts.jsonl"
 OUTPUT_PATH = _REPO_ROOT / "data" / "raw" / "test_ground_truth.jsonl"

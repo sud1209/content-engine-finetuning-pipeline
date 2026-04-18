@@ -33,7 +33,7 @@ DIMENSIONS = list(WEIGHTS.keys())
 
 class ScoreSet(BaseModel):
     hook_strength: int = Field(ge=1, le=10)
-    tone_compliance: int = Field(ge=0, le=10)
+    tone_compliance: int = Field(ge=1, le=10)
     x_algorithm_optimization: int = Field(ge=1, le=10)
     data_specificity: int = Field(ge=1, le=10)
     pillar_alignment: int = Field(ge=1, le=10)
@@ -70,3 +70,20 @@ class ScoredExample(BaseModel):
     quality_tier: str
     scores: ScoreSet
     rubric_hash: str = RUBRIC_HASH
+
+    @model_validator(mode="after")
+    def validate_rubric_and_tier(self) -> "ScoredExample":
+        if self.rubric_hash != RUBRIC_HASH:
+            raise ValueError(
+                f"rubric_hash mismatch: record has {self.rubric_hash!r}, "
+                f"current rubric is {RUBRIC_HASH!r}. "
+                "Re-score this example against the current rubric before ingesting."
+            )
+        expected_tier = self.scores.tier()
+        if self.quality_tier != expected_tier:
+            raise ValueError(
+                f"quality_tier mismatch: field says {self.quality_tier!r} "
+                f"but scores.tier() returns {expected_tier!r}. "
+                "Ensure quality_tier is derived from the same ScoreSet."
+            )
+        return self
