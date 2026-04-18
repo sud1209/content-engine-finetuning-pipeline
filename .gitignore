@@ -1,4 +1,7 @@
 .env
+.claude/
+PLAN.md
+ENGINEERING_LOG.md
 data/raw/*.jsonl
 data/processed/
 outputs/
