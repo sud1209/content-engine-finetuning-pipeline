@@ -33,7 +33,7 @@ DIMENSIONS = list(WEIGHTS.keys())
 
 class ScoreSet(BaseModel):
     hook_strength: int = Field(ge=1, le=10)
-    tone_compliance: int = Field(ge=1, le=10)
+    tone_compliance: int = Field(ge=0, le=10)
     x_algorithm_optimization: int = Field(ge=1, le=10)
     data_specificity: int = Field(ge=1, le=10)
     pillar_alignment: int = Field(ge=1, le=10)
@@ -45,6 +45,10 @@ class ScoreSet(BaseModel):
     def enforce_never_list(self) -> "ScoreSet":
         if self.never_list_violation:
             self.tone_compliance = 0
+        elif self.tone_compliance == 0:
+            raise ValueError(
+                "tone_compliance=0 is only valid when never_list_violation=True"
+            )
         return self
 
     def composite_score(self) -> float:
