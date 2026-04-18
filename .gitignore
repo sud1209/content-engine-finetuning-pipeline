@@ -1,8 +1,8 @@
 .env
-data/raw/
+data/raw/*.jsonl
 data/processed/
 outputs/
-benchmark/results/
+benchmark/results/*.png
 __pycache__/
 *.pyc
 .kaggle/

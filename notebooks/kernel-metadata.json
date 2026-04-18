@@ -1,0 +1,14 @@
+{
+  "id": "sudrathi/tweet-scorer-training",
+  "title": "Tweet Scorer — Llama 3.1 8B QLoRA Training",
+  "code_file": "02_train_kaggle.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": []
+}

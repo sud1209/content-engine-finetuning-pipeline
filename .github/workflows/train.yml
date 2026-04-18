@@ -1,0 +1,33 @@
+name: Trigger Training on Kaggle
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'dataset/**'
+      - 'training/**'
+
+jobs:
+  trigger-kaggle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Kaggle CLI
+        run: pip install kaggle
+
+      - name: Configure Kaggle credentials
+        run: |
+          mkdir -p ~/.kaggle
+          echo '{"username":"${{ secrets.KAGGLE_USERNAME }}","key":"${{ secrets.KAGGLE_KEY }}"}' > ~/.kaggle/kaggle.json
+          chmod 600 ~/.kaggle/kaggle.json
+
+      - name: Push notebook and trigger run
+        run: |
+          kaggle kernels push -p notebooks/
+          echo "Kaggle kernel triggered. Monitor at https://www.kaggle.com/${{ secrets.KAGGLE_USERNAME }}/tweet-scorer-training"

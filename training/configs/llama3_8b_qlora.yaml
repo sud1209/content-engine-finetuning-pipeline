@@ -1,0 +1,24 @@
+base_model: "meta-llama/Llama-3.1-8B-Instruct"
+output_dir: "outputs/llama3-8b-tweet-scorer"
+max_seq_length: 2048
+
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+
+epochs: 3
+batch_size: 1          # T4 15GB — P100 is unsupported by PyTorch ≥2.2 (sm_60 dropped)
+grad_accum_steps: 16   # effective batch = 16
+learning_rate: 2.0e-4
+use_bf16: false        # T4 supports fp16 only; bf16 requires Ampere (sm_80+)
+
+# Kaggle T4 15GB: ~2h/epoch, ~6h total (use T4 not P100)
+# A100 80GB: batch_size=4, grad_accum=4 → ~45min/epoch
