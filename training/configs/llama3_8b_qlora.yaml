@@ -15,10 +15,10 @@ target_modules:
   - down_proj
 
 epochs: 3
-batch_size: 2
-grad_accum_steps: 8
+batch_size: 1          # T4 15GB — P100 is unsupported by PyTorch ≥2.2 (sm_60 dropped)
+grad_accum_steps: 16   # effective batch = 16
 learning_rate: 2.0e-4
-use_bf16: false
+use_bf16: false        # T4 supports fp16 only; bf16 requires Ampere (sm_80+)
 
-# Kaggle P100 16GB: ~90 min/epoch, ~4.5h total
-# T4 15GB fallback: reduce batch_size to 1, grad_accum to 16
+# Kaggle T4 15GB: ~2h/epoch, ~6h total (use T4 not P100)
+# A100 80GB: batch_size=4, grad_accum=4 → ~45min/epoch
