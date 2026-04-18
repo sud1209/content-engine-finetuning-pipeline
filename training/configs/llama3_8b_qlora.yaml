@@ -1,0 +1,24 @@
+base_model: "meta-llama/Llama-3.1-8B-Instruct"
+output_dir: "outputs/llama3-8b-tweet-scorer"
+max_seq_length: 2048
+
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+
+epochs: 3
+batch_size: 2
+grad_accum_steps: 8
+learning_rate: 2.0e-4
+use_bf16: false
+
+# Kaggle P100 16GB: ~90 min/epoch, ~4.5h total
+# T4 15GB fallback: reduce batch_size to 1, grad_accum to 16
