@@ -1,0 +1,8 @@
+.env
+data/raw/
+data/processed/
+outputs/
+benchmark/results/
+__pycache__/
+*.pyc
+.kaggle/
