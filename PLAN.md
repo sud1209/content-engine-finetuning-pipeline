@@ -108,7 +108,7 @@ This is the missing "I understand what the model is doing" signal for ML Infra r
 │              train / val / test splits (80/10/10)                  │
 │                              │                                      │
 │                              ▼                                      │
-│              HF Hub: sudar/tweet-scorer-dataset                    │
+│              HF Hub: sud1157/tweet-scorer-dataset                    │
 └─────────────────────────────────────────────────────────────────────┘
                                │
                                ▼
@@ -127,7 +127,7 @@ This is the missing "I understand what the model is doing" signal for ML Infra r
 │  Best checkpoint ──► merge adapter ──► save GGUF (optional)        │
 │                              │                                      │
 │                              ▼                                      │
-│              HF Hub: sudar/tweet-scorer-llama3-8b                  │
+│              HF Hub: sud1157/tweet-scorer-llama3-8b                  │
 └─────────────────────────────────────────────────────────────────────┘
                                │
                                ▼
@@ -533,14 +533,14 @@ dataset = DatasetDict({
     "test": Dataset.from_list([format_for_training(e) for e in test]),
 })
 
-dataset.push_to_hub("sudar/tweet-scorer-dataset", private=False)
+dataset.push_to_hub("sud1157/tweet-scorer-dataset", private=False)
 ```
 
 **Phase 1 Deliverables:**
 - `data/raw/scored_tweets_raw.jsonl` (~2,300 Sonnet-labeled rows)
 - `data/raw/test_ground_truth.jsonl` (200 Haiku-labeled rows, held out)
 - `data/processed/{train,val,test}.jsonl`
-- HF Hub dataset: `sudar/tweet-scorer-dataset`
+- HF Hub dataset: `sud1157/tweet-scorer-dataset`
 
 ---
 
@@ -609,7 +609,7 @@ def main():
         loftq_config=None,
     )
 
-    dataset = load_dataset("sudar/tweet-scorer-dataset")
+    dataset = load_dataset("sud1157/tweet-scorer-dataset")
 
     trainer = SFTTrainer(
         model=model,
@@ -650,8 +650,8 @@ def main():
     tokenizer.save_pretrained(f"{cfg.output_dir}/final_adapter")
 
     # Push adapter to HF Hub
-    model.push_to_hub("sudar/tweet-scorer-llama3-8b")
-    tokenizer.push_to_hub("sudar/tweet-scorer-llama3-8b")
+    model.push_to_hub("sud1157/tweet-scorer-llama3-8b")
+    tokenizer.push_to_hub("sud1157/tweet-scorer-llama3-8b")
 
     wandb.finish()
 
@@ -720,7 +720,7 @@ tokenizer.save_pretrained("outputs/llama3-8b-tweet-scorer-merged")
 ```
 
 **Phase 2 Deliverables:**
-- Trained LoRA adapter saved to HF Hub: `sudar/tweet-scorer-llama3-8b`
+- Trained LoRA adapter saved to HF Hub: `sud1157/tweet-scorer-llama3-8b`
 - wandb run with loss curves, eval metrics (downloaded from Kaggle)
 
 ---
@@ -748,7 +748,7 @@ test_data = [json.loads(l) for l in open("/kaggle/input/tweet-scorer-dataset/tes
 # Cell 3: Load fine-tuned model from HF Hub
 from unsloth import FastLanguageModel
 ft_model, tokenizer = FastLanguageModel.from_pretrained(
-    "sudar/tweet-scorer-llama3-8b", max_seq_length=2048, load_in_4bit=True
+    "sud1157/tweet-scorer-llama3-8b", max_seq_length=2048, load_in_4bit=True
 )
 FastLanguageModel.for_inference(ft_model)
 
@@ -829,7 +829,7 @@ def run_benchmark(test_data, ft_model, base_model, tokenizer):
 
 ```bash
 python -m vllm.entrypoints.openai.api_server \
-    --model sudar/tweet-scorer-llama3-8b \
+    --model sud1157/tweet-scorer-llama3-8b \
     --dtype bfloat16 \
     --max-model-len 2048 \
     --gpu-memory-utilization 0.90 \
@@ -1297,7 +1297,7 @@ bnb_4bit_compute_dtype: bfloat16
 bnb_4bit_use_double_quant: true  # Nested quantization — saves ~0.4 bits/param
 
 # Data
-dataset_name: "sudar/tweet-scorer-dataset"
+dataset_name: "sud1157/tweet-scorer-dataset"
 packing: true                # Reduces wasted padding; speeds up training ~20%
 
 # Logging
@@ -1457,11 +1457,11 @@ The benchmark answers: **"Does fine-tuning close the gap between an untrained op
 
 ### Hard Requirements (project is "done" when all pass)
 
-- [ ] Dataset of at least 2,000 validated examples published to `sudar/tweet-scorer-dataset` on HF Hub
+- [ ] Dataset of at least 2,000 validated examples published to `sud1157/tweet-scorer-dataset` on HF Hub
 - [ ] Dataset uses correct dimension name `x_algorithm_optimization` (not `algorithm_optimization`)
 - [ ] Dataset includes `never_list_violation` boolean in every label
 - [ ] Training runs to completion without loss spikes; final eval loss < 0.4
-- [ ] Fine-tuned adapter published to `sudar/tweet-scorer-llama3-8b` on HF Hub
+- [ ] Fine-tuned adapter published to `sud1157/tweet-scorer-llama3-8b` on HF Hub
 - [ ] Kaggle benchmark notebook runs end-to-end without errors
 - [ ] vLLM + FastAPI serving code written and reviewed (architecture artifact — not required to run locally)
 - [ ] Benchmark card generated with all four charts
@@ -1493,7 +1493,7 @@ The benchmark answers: **"Does fine-tuning close the gap between an untrained op
 
 ### What to Publish
 
-#### 1. Dataset: `sudar/tweet-scorer-dataset`
+#### 1. Dataset: `sud1157/tweet-scorer-dataset`
 
 - Format: `DatasetDict` with `train` / `validation` / `test` splits
 - Each example: `{"messages": [system, user, assistant]}` chat format
@@ -1507,7 +1507,7 @@ Score distributions: mean ~6.0, std ~2.0 across all dimensions
 Generated with: GPT-4o (temperature=0.3)
 ```
 
-#### 2. LoRA Adapter: `sudar/tweet-scorer-llama3-8b`
+#### 2. LoRA Adapter: `sud1157/tweet-scorer-llama3-8b`
 
 - Base model: `meta-llama/Llama-3.1-8B-Instruct`
 - Adapter format: `peft` SafeTensors
@@ -1535,7 +1535,7 @@ from unsloth import FastLanguageModel
 import json
 
 model, tokenizer = FastLanguageModel.from_pretrained(
-    "sudar/tweet-scorer-llama3-8b",
+    "sud1157/tweet-scorer-llama3-8b",
     max_seq_length=2048,
     load_in_4bit=True,
 )
@@ -1554,7 +1554,7 @@ FastLanguageModel.for_inference(model)
 
 ## Training
 
-- Dataset: `sudar/tweet-scorer-dataset` (1,600 train examples)
+- Dataset: `sud1157/tweet-scorer-dataset` (1,600 train examples)
 - Hardware: 1x A100 80GB
 - Training time: ~2.5 hours
 - wandb run: [link]
@@ -1564,10 +1564,10 @@ FastLanguageModel.for_inference(model)
 
 | Artifact | HF Hub Name |
 |---|---|
-| Dataset | `sudar/tweet-scorer-dataset` |
-| LoRA adapter | `sudar/tweet-scorer-llama3-8b` |
-| Merged full weights (optional) | `sudar/tweet-scorer-llama3-8b-merged` |
-| GGUF (optional) | `sudar/tweet-scorer-llama3-8b-gguf` |
+| Dataset | `sud1157/tweet-scorer-dataset` |
+| LoRA adapter | `sud1157/tweet-scorer-llama3-8b` |
+| Merged full weights (optional) | `sud1157/tweet-scorer-llama3-8b-merged` |
+| GGUF (optional) | `sud1157/tweet-scorer-llama3-8b-gguf` |
 
 All artifacts are public. The dataset and adapter are the two non-optional publishes.
 
