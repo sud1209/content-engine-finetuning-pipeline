@@ -2,6 +2,7 @@
 .claude/
 PLAN.md
 ENGINEERING_LOG.md
+docs/INTERVIEW-QA.md
 data/raw/*.jsonl
 data/processed/
 outputs/
