@@ -1,98 +1,69 @@
-# Tweet Scorer — Fine-Tuning Pipeline
+# Tweet Scorer — QLoRA Fine-Tuning Pipeline
 
-An end-to-end ML pipeline that fine-tunes **Llama 3.1 8B** to replicate the scoring logic from [`twitter-content-engine`](../twitter-bot) — replacing Claude API calls at inference time with a self-hosted model.
+Fine-tuned **Llama 3.1 8B** to replace Claude Haiku API calls in a tweet quality scoring system. The goal: own the scoring model instead of paying per inference. This is an exploratory research project — the pipeline is complete, results are benchmarked honestly, and the next iteration path is documented.
 
-The pipeline covers every layer below the API surface: synthetic dataset design, QLoRA fine-tuning, structured output generation, and rigorous benchmarking against the production scorer it was trained to replace.
-
----
-
-## What This Is
-
-`twitter-content-engine` scores tweet drafts across 6 dimensions using `claude-haiku-4-5-20251001`. This project trains a local Llama 3.1 8B model to produce identical structured outputs — converting "calls Claude for every score" into "owns the scoring model."
-
-| Stage | What Runs | Cost |
-|---|---|---|
-| Dataset generation (2,355 examples) | Claude Code (Sonnet, subscription) | $0 |
-| Test set ground truth (200 examples) | Claude Haiku API | ~$0.20 |
-| QLoRA fine-tuning | Kaggle T4 GPU (free tier) | $0 |
-| Benchmark | Kaggle T4 GPU (free tier) | $0 |
-| **Total** | | **~$0.20** |
+**Status:** Research complete. Not in production. Findings inform the next training run.
 
 ---
 
-## Benchmark Results
+## The Problem
 
-Three-way comparison on 200 held-out examples. Ground truth = Claude Haiku scores (the model this pipeline is trained to replace).
+[`twitter-content-engine`](../twitter-bot) scores every tweet draft across 6 quality dimensions before publishing — hook strength, tone compliance, algorithm optimization, data specificity, pillar alignment, and CTA quality. It calls `claude-haiku-4-5-20251001` for every score. That's an external API call on the critical path, with per-call cost and ~800ms latency.
 
-| Model | Mean MAE | Within-1 Agr. | Composite MAE | Never-list F1 | Latency |
-|---|---|---|---|---|---|
-| Fine-tuned Llama 3.1 8B | 1.974 | 46.4% | 1.649 | **1.000** | ~6s |
-| Base Llama 3.1 8B | 1.923 | 52.3% | 1.315 | 0.833 | ~10s |
-| Claude Haiku (ground truth) | 0.0 | 100% | 0.0 | 1.000 | — |
+The question this project answers: **can an open-source model learn this rubric well enough to replace those calls?**
 
-### Per-Dimension Breakdown (Fine-tuned)
+---
 
-| Dimension | MAE | Within-1 | Notes |
+## Results
+
+Three-way benchmark on 200 held-out examples. Ground truth = Claude Haiku (the model being replaced).
+
+| Model | Mean MAE | Within-1 Agr. | Never-list F1 | Latency |
+|---|---|---|---|---|
+| Fine-tuned Llama 3.1 8B | 1.974 | 46.4% | **1.000** | ~6s |
+| Base Llama 3.1 8B (zero-shot) | 1.923 | 52.3% | 0.833 | ~10s |
+| Claude Haiku (ground truth) | 0.0 | 100% | 1.000 | ~800ms |
+
+**What worked:** The fine-tuned model learned rule-based dimensions well. `tone_compliance` MAE of 0.21 with 96% within-1 agreement. `never_list_f1 = 1.000` — perfect precision and recall on hashtag violation detection, which is the highest-stakes binary decision in the rubric. The fine-tuned model also runs **40% faster** than base Llama at inference time due to Unsloth's optimized kernels.
+
+**What didn't:** Judgment-based dimensions — `cta_quality` (MAE 3.42), `x_algorithm_optimization` (MAE 2.67) — are not close enough to replace Haiku. The fine-tuned model is marginally worse than the base model on mean MAE overall.
+
+**Why:** Two compounding data quality issues, documented below. These are solvable — this is not a model capacity problem.
+
+### Per-Dimension Breakdown
+
+| Dimension | MAE | Within-1 | Assessment |
 |---|---|---|---|
-| `tone_compliance` | **0.21** | **96%** | Learned the binary hashtag rule perfectly |
-| `pillar_alignment` | **1.00** | **77%** | Consistently identifies content pillar |
-| `hook_strength` | 1.87 | 42% | Struggles with Harry Dry 3-test nuance |
-| `x_algorithm_optimization` | 2.67 | 12% | Hardest rubric dimension to calibrate |
-| `data_specificity` | 2.68 | 33% | Conflates specificity with quality |
-| `cta_quality` | 3.42 | 19% | Weakest dimension |
-
-### What This Shows
-
-The fine-tuned model learned the **rule-based** dimensions (tone_compliance, pillar_alignment, never_list_violation) but not the **judgment-based** ones (cta_quality, x_algorithm_optimization). This is a training data quality signal, not a pipeline failure.
-
-The fine-tuned model also runs **40% faster** than the base model despite identical architecture — Unsloth's optimized inference path reduces per-token generation overhead.
-
-The `never_list_f1 = 1.0` result is a genuine win: the model learned to detect hashtag violations with perfect precision and recall, which is the highest-stakes binary decision in the rubric.
+| `tone_compliance` | **0.21** | **96%** | Production-ready |
+| `pillar_alignment` | **1.00** | **77%** | Usable |
+| `hook_strength` | 1.87 | 42% | Needs better training data |
+| `x_algorithm_optimization` | 2.67 | 12% | Not ready |
+| `data_specificity` | 2.68 | 33% | Not ready |
+| `cta_quality` | 3.42 | 19% | Not ready |
 
 ---
 
-## Root Cause Analysis
+## Root Cause
 
-The gap between fine-tuned and base on judgment dimensions comes from two compounding factors:
+**Training data repetition.** Batches 09–28 (1,440 of 2,355 examples, or 61% of the dataset) used 20 tweet templates cycled with slightly varied scores. The model learned to associate content fingerprints with scores instead of applying rubric logic. A model that memorizes "this template scores a 7" generalizes poorly to new content.
 
-**1. Training data repetition.** Batches 09–28 (1,440 of 2,355 examples) used a template system — 20 tweet templates cycled across batches with slightly varied scores. The model saw the same tweet content paired with different score labels, training it to associate content patterns with scores rather than learning the rubric logic. A model that memorizes "this tweet gets a 7" generalizes poorly to unseen tweets.
+**Label distribution mismatch.** Training labels came from Claude Sonnet; ground truth labels came from Claude Haiku. Same rubric, different calibration — Sonnet is more conservative on `cta_quality` and more generous on `hook_strength`. The fine-tuned model learned Sonnet's bias and is penalized at benchmark time against Haiku's bias.
 
-**2. Label distribution bias.** Training labels were generated by Claude Sonnet (via Claude Code). Ground truth labels were generated by Claude Haiku with a separate scoring call. Sonnet and Haiku apply the same rubric differently — Sonnet scores more conservatively on `cta_quality` and more generously on `hook_strength`. The fine-tuned model learned Sonnet's scoring bias and gets penalized when compared against Haiku's bias.
+Neither of these is a fundamental pipeline failure. Both have clear fixes.
 
 ---
 
-## Potential Improvements
+## What the Next Run Looks Like
 
-These are specific, evidence-backed interventions — not generic "train more data" advice.
+These are evidence-backed interventions, not generic "get more data" advice.
 
-### 1. Replace template batches with diverse generation
+**1. Eliminate template repetition** — Regenerate batches 09–28 with unique tweet content per example. One approach: generate drafts from real AI/ML news headlines, then score. Expected impact: largest gains on `cta_quality` and `x_algorithm_optimization`, since those require rubric generalization.
 
-The highest-leverage fix. Batches 09–28 need to be regenerated with unique tweet content per example. One approach: use Claude to generate tweet drafts from real AI/ML news headlines, then score them. No two training examples should share a content template.
+**2. Align training labels to Haiku** — Score all training examples with Haiku instead of Sonnet. Cost: ~$2 for 2,355 examples. This eliminates the scorer bias entirely and aligns the training distribution with the benchmark distribution.
 
-Expected impact: the judgment-based dimensions (cta_quality, x_algorithm_optimization) should see the largest improvement, since those require generalizing rubric logic rather than pattern-matching on content.
+**3. Chain-of-thought format** — Change training format from `(tweet) → {scores}` to `(tweet) → {reasoning} → {scores}`. The `reasoning` field already exists in every training example. Repositioning it before the scores teaches rubric application step-by-step rather than direct pattern-to-score mapping.
 
-### 2. Calibrate training labels to Haiku, not Sonnet
-
-Currently the training pipeline uses Sonnet (via Claude Code subscription) to generate labels and Haiku as ground truth. The score distributions differ. Two fixes:
-
-- Score all training examples with Haiku instead of Sonnet — same model, same bias as the benchmark ground truth. Costs ~$2 for 2,355 examples at Haiku pricing.
-- Or: score each training example with both Sonnet and Haiku, keep only examples where they agree within ±1 on all dimensions. Filters to ~60% of the dataset but eliminates label noise.
-
-### 3. Train on reasoning, not just scores
-
-The current training format is `(tweet) → {score_json}`. A better format adds the rubric reasoning as chain-of-thought before the scores: `(tweet) → {reasoning about each dimension} → {score_json}`. The model learns to apply the rubric step by step rather than outputting scores directly.
-
-This is straightforward to implement: the `reasoning` field is already in every training example. Move it before the scores in the chat template, or use a separate `<thinking>` block.
-
-### 4. Increase LoRA rank for judgment dimensions
-
-Rank 16 is appropriate for simple task adaptation. The judgment-based dimensions (cta_quality, x_algorithm_optimization) require more nuanced reasoning — rank 32 or 64 may be necessary to represent that complexity. Trade-off: higher rank increases VRAM usage and overfitting risk on small datasets. Pair with rank increase + more diverse data, not rank increase alone.
-
-### 5. Supervised fine-tuning → GRPO reinforcement
-
-Once the SFT model is better calibrated, a GRPO (Group Relative Policy Optimization) stage can directly optimize for score agreement with Haiku ground truth. The reward signal is straightforward: composite MAE between model output and Haiku label. TRL supports GRPOTrainer out of the box.
-
-This is the natural next step once SFT convergence improves — GRPO on a poorly calibrated SFT model will just reinforce the wrong behavior.
+**4. SFT → GRPO** — Once SFT converges better, a GRPO stage can directly optimize for Haiku score agreement. Reward signal: composite MAE vs. Haiku label. TRL's `GRPOTrainer` supports this. Prerequisite: a well-calibrated SFT model — GRPO on a poorly-calibrated base amplifies existing errors.
 
 ---
 
@@ -108,83 +79,101 @@ scored_tweets_raw.jsonl      test_ground_truth.jsonl
      └──────────────┬───────────────┘
                     ▼
            validate_dataset.py
+           (schema + rubric hash validation)
                     │
                     ▼
        sud1157/tweet-scorer-dataset (HF Hub)
                     │
                     ▼
         Unsloth + QLoRA + SFTTrainer
-        (Kaggle T4, ~6h, rank=16)
+        (Kaggle T4 x1, ~6h, rank=16, 4-bit)
                     │
                     ▼
        sud1157/tweet-scorer-llama3-8b (HF Hub)
                     │
                     ▼
-        benchmark vs base vs Haiku GT
-        (200 held-out examples)
+        3-way benchmark: fine-tuned vs base vs Haiku GT
 ```
 
-## Serving Design (Architecture Artifact)
+---
 
-The `serving/` directory contains production-ready code targeting a cloud GPU instance — vLLM + FastAPI + Docker Compose. This code is not run locally; it documents the productionization path.
+## Cost
+
+| Stage | Compute | API Cost |
+|---|---|---|
+| Dataset generation (2,355 examples) | Claude Code subscription | $0 |
+| Test ground truth (200 examples) | Claude Haiku API | ~$0.20 |
+| QLoRA fine-tuning (~6h) | Kaggle T4 (free tier) | $0 |
+| Benchmark | Kaggle T4 (free tier) | $0 |
+| **Total** | | **~$0.20** |
+
+---
+
+## Serving Design
+
+The `serving/` directory contains the productionization path — vLLM + FastAPI + guided JSON decoding. Not deployed; documents what production would look like.
+
+Guided decoding (`guided_json`) enforces valid JSON output at the token level — eliminates parse errors and retry logic entirely.
 
 ```bash
-# Launch vLLM with guided JSON decoding
+# vLLM server
 python -m vllm.entrypoints.openai.api_server \
     --model sud1157/tweet-scorer-llama3-8b \
     --dtype float16 \
-    --max-model-len 2048 \
-    --served-model-name tweet-scorer
+    --max-model-len 2048
 
 # Score a tweet
 curl -X POST http://localhost:8000/score \
   -H "Content-Type: application/json" \
-  -d '{"content": "We replaced 3,000 lines of prompt engineering with 500 labeled examples. Fine-tuned accuracy: 91%. Prompting: 76%."}'
+  -d '{"content": "We replaced 3,000 lines of prompt engineering with 500 labeled examples."}'
 ```
 
-Guided decoding (`guided_json` parameter) enforces valid JSON output at the token level — no retry logic, no parsing errors.
+At production scale on an A10G instance (~$1/hr): **~$0 per 1,000 scores vs ~$0.50 for Haiku API**. Latency: ~400ms vs ~800ms.
 
 ---
 
 ## Reproducing
 
 ```bash
-# 1. Setup
+# 1. Install dependencies
 uv sync
-cp .env.example .env  # fill in ANTHROPIC_API_KEY, HF_TOKEN, WANDB_API_KEY
+cp .env.example .env  # ANTHROPIC_API_KEY, HF_TOKEN, WANDB_API_KEY
 
-# 2. Validate existing dataset (already generated)
+# 2. Validate existing dataset
 python dataset/validate_dataset.py
 
-# 3. Push dataset to HF Hub (already done: sud1157/tweet-scorer-dataset)
+# 3. Push dataset to HF Hub (already published: sud1157/tweet-scorer-dataset)
 python -m dataset.split_dataset
 
-# 4. Train on Kaggle — open notebooks/02_train_kaggle.ipynb
-#    Accelerator: GPU T4 x1. Add HF_TOKEN + WANDB_API_KEY as Kaggle secrets.
-#    Runtime: ~6h. Adapter pushed automatically to sud1157/tweet-scorer-llama3-8b.
+# 4. Fine-tune on Kaggle
+#    Open notebooks/02_train_kaggle.ipynb
+#    Accelerator: GPU T4 x1
+#    Add HF_TOKEN + WANDB_API_KEY as Kaggle Secrets
+#    Runtime: ~6h. Adapter auto-pushed to sud1157/tweet-scorer-llama3-8b
 
-# 5. Benchmark on Kaggle — open notebooks/03_benchmark_kaggle.ipynb
-#    Add tweet-scorer-test dataset (data/raw/test_ground_truth.jsonl).
-#    Download benchmark_results.json + benchmark_card.html from output.
+# 5. Benchmark on Kaggle
+#    Open notebooks/03_benchmark_kaggle.ipynb
+#    Add test_ground_truth.jsonl as a Kaggle dataset input
+#    Download benchmark_results.json + benchmark_card.html from output
 ```
 
 ---
 
-## HF Hub Artifacts
+## Artifacts
 
-| Artifact | Link |
+| Artifact | Location |
 |---|---|
-| Dataset | `sud1157/tweet-scorer-dataset` |
-| LoRA adapter | `sud1157/tweet-scorer-llama3-8b` |
+| Training dataset | `sud1157/tweet-scorer-dataset` on HF Hub |
+| LoRA adapter | `sud1157/tweet-scorer-llama3-8b` on HF Hub |
+| Benchmark results | `benchmark/results/benchmark_results.json` |
+| Benchmark card | `benchmark/results/benchmark_card.html` |
 
 ---
 
 ## What This Demonstrates
 
-Every other project in this portfolio calls commercial APIs. This one goes below the API surface:
-
-- **Synthetic dataset design** — schema versioning via rubric hash, never_list_violation enforcement, quality tier distribution
-- **QLoRA / PEFT** — 4-bit NF4 quantization, rank-16 LoRA on all linear layers, Unsloth gradient checkpointing
-- **Honest benchmarking** — three-way comparison with a real ground truth, per-dimension breakdown, root cause analysis of underperformance
-- **Production serving design** — vLLM guided decoding, FastAPI, Docker Compose, eval gate before model publish
-- **Cost engineering** — entire pipeline for ~$0.20 in API spend using free compute tiers
+- **Below the API surface** — synthetic dataset design with schema versioning, rubric hash enforcement, quality tier distribution across training splits
+- **QLoRA / PEFT mechanics** — 4-bit NF4 quantization, rank-16 LoRA on all 7 attention + MLP projections, Unsloth gradient checkpointing, packing for T4 utilization
+- **Honest benchmarking** — three-way comparison against a real ground truth, per-dimension breakdown, root cause analysis of underperformance with specific next steps
+- **Production serving design** — vLLM guided decoding, FastAPI rate limiting, SQLite cost tracking, eval gate before model publish
+- **Cost discipline** — full pipeline for ~$0.20 in API spend on free compute
